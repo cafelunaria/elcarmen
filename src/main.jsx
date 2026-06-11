@@ -93,16 +93,33 @@ function sanitizeContentForSave(value) {
   return clean;
 }
 
+const FIREBASE_CACHE_KEY = 'finca-el-carmen-siteContent-main-cache-v2';
+
+function readCachedFirebaseContent() {
+  try {
+    const raw = localStorage.getItem(FIREBASE_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedFirebaseContent(value) {
+  try {
+    localStorage.setItem(FIREBASE_CACHE_KEY, JSON.stringify(sanitizeContentForSave(value)));
+  } catch {
+    // El cache local solo acelera la carga. Si falla, no debe afectar la web.
+  }
+}
+
 function useSiteContent() {
-  // IMPORTANTE: content inicia en null para NO mostrar ni guardar defaultContent
-  // mientras Firebase todavía está cargando. Esto evita que cambios de código
-  // borren textos o imágenes ya guardados desde el panel.
+  // Firebase es la fuente principal. defaultContent solo se usa como plantilla inicial
+  // cuando el documento siteContent/main todavía no existe.
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
 
   async function load() {
-    setLoading(true);
     setStatus('');
 
     try {
@@ -111,27 +128,46 @@ function useSiteContent() {
         const localContent = local ? mergeContent(defaultContent, JSON.parse(local)) : defaultContent;
         setContent(localContent);
         setStatus('Modo local: configura Firebase para guardar en la nube.');
+        setLoading(false);
         return;
+      }
+
+      // Cache seguro: solo contiene datos leídos/guardados desde Firebase.
+      // Esto permite que la página aparezca más rápido sin volver a mostrar defaultContent.
+      const cached = readCachedFirebaseContent();
+      if (cached) {
+        setContent(mergeContent(defaultContent, cached));
+        setLoading(false);
+      } else {
+        setLoading(true);
       }
 
       const refDoc = doc(db, 'siteContent', 'main');
       const snap = await getDoc(refDoc);
 
       if (snap.exists()) {
-        // Firebase es la fuente de verdad. defaultContent solo completa campos nuevos
-        // que agreguemos en futuras versiones, sin borrar lo existente.
-        setContent(mergeContent(defaultContent, snap.data()));
-        setStatus('Contenido cargado desde Firebase.');
+        const firebaseData = snap.data();
+        const merged = mergeContent(defaultContent, firebaseData);
+        setContent(merged);
+        writeCachedFirebaseContent(firebaseData);
+        setStatus('Contenido sincronizado.');
       } else {
-        // Solo usamos defaultContent si el documento aún no existe.
-        // No lo guardamos automáticamente para evitar sobreescrituras accidentales.
-        setContent(defaultContent);
+        // Solo si el documento no existe usamos la plantilla para que puedas crear la primera versión.
+        // Nunca se guarda automáticamente.
+        const firstContent = cached ? mergeContent(defaultContent, cached) : defaultContent;
+        setContent(firstContent);
         setStatus('No existe contenido inicial en Firebase. Edita y guarda una primera versión.');
       }
     } catch (error) {
-      setStatus(`Error al cargar: ${error.message}`);
-      // Si falla Firebase, mostramos plantilla pero NO guardamos automáticamente.
-      setContent(defaultContent);
+      const cached = readCachedFirebaseContent();
+      if (cached) {
+        setContent(mergeContent(defaultContent, cached));
+        setStatus(`Mostrando último contenido guardado. Error al sincronizar: ${error.message}`);
+      } else {
+        setStatus(`Error al cargar contenido: ${error.message}`);
+        // No mostramos defaultContent si Firebase falla, para evitar confundirlo con contenido real.
+        setContent(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -154,11 +190,20 @@ function useSiteContent() {
       const snap = await getDoc(refDoc);
       const currentData = snap.exists() ? snap.data() : {};
 
-      // Fusionamos con el contenido existente para conservar campos/imágenes
-      // aunque el código nuevo agregue secciones o falten campos en el borrador.
+      // El borrador actualizado prevalece, pero conservamos campos anteriores que no estén en el formulario.
       const safePayload = mergeContent(currentData, cleanContent);
 
-      await setDoc(refDoc, { ...safePayload, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(
+        refDoc,
+        {
+          ...safePayload,
+          updatedAt: serverTimestamp(),
+          initialized: true
+        },
+        { merge: true }
+      );
+
+      writeCachedFirebaseContent(safePayload);
       setContent(mergeContent(defaultContent, safePayload));
       setStatus('Cambios guardados en Firebase.');
     } catch (error) {
@@ -424,9 +469,8 @@ function PublicSite({ content, setRoute }) {
 
 function LoadingPage() {
   return <div className="loading-page" aria-label="Cargando">
-    <div className="loading-card">
+    <div className="loading-card logo-only">
       <img src="/el-carmen-logo.jpg" alt="Finca El Carmen" />
-      <span>Finca El Carmen</span>
     </div>
   </div>;
 }

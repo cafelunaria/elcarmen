@@ -1,21 +1,23 @@
-# Dependencias
+# Dependencies
 node_modules/
 
-# Build
-/dist/
+# Build output
+dist/
 
-# Variables de entorno locales
+# Environment variables
 .env
 .env.local
-.env.development
 .env.production
+.env.development
 
 # macOS
 .DS_Store
 __MACOSX/
 
-# Vercel / Firebase
+# Vercel
 .vercel/
+
+# Firebase local cache
 .firebase/
 
 # Logs
