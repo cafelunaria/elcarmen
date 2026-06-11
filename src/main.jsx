@@ -99,11 +99,11 @@ function useSiteContent() {
   // borren textos o imágenes ya guardados desde el panel.
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState('Cargando contenido desde Firebase...');
+  const [status, setStatus] = useState('');
 
   async function load() {
     setLoading(true);
-    setStatus('Cargando contenido desde Firebase...');
+    setStatus('');
 
     try {
       if (!firebaseReady) {
@@ -389,12 +389,11 @@ function PublicSite({ content, setRoute }) {
   </>;
 }
 
-function LoadingPage({ message = 'Cargando contenido...' }) {
-  return <div className="loading-page">
+function LoadingPage() {
+  return <div className="loading-page" aria-label="Cargando">
     <div className="loading-card">
       <img src="/el-carmen-logo.jpg" alt="Finca El Carmen" />
       <span>Finca El Carmen</span>
-      <p>{message}</p>
     </div>
   </div>;
 }
@@ -482,7 +481,7 @@ function App() {
 
   // No renderizamos la web ni el panel hasta que Firebase haya terminado de cargar.
   // Así evitamos mostrar defaultContent y evitamos guardar accidentalmente la plantilla.
-  if (loading || !content) return <LoadingPage message={status || 'Cargando contenido...'} />;
+  if (loading || !content) return <LoadingPage />;
 
   if (route === 'admin' && !user) return <Login onLogged={setUser} />;
   if (route === 'admin') return <AdminPanel content={content} setContent={setContent} save={save} status={status} setRoute={setRoute} />;
