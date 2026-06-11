@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /siteContent/{docId} {
+      // La página pública puede leer el contenido.
+      allow read: if true;
+
+      // Solo usuarios autenticados desde Firebase Auth pueden editar.
+      allow create, update, delete: if request.auth != null;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+
+# Variables de entorno
+.env
+.env.local
+.env.production
+
+# MacOS
+.DS_Store
+
+# Firebase
+.firebase/
+
+# Vercel
+.vercel/
+
+# Logs
+*.log
+
+# VSCode
+.vscode/
+
+# Cache
+.cache/
