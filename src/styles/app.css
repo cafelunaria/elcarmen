@@ -844,3 +844,52 @@ footer img,
   .social-buttons{display:grid;grid-template-columns:1fr;gap:9px}
   .social-button{width:100%;justify-content:center}
 }
+
+/* Loading seguro: evita mostrar defaultContent mientras Firebase carga */
+.loading-page {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(168, 191, 142, .24), transparent 34%),
+    linear-gradient(135deg, #f7f3ea 0%, #eef2e6 100%);
+  padding: 24px;
+}
+
+.loading-card {
+  width: min(360px, 92vw);
+  padding: 30px 26px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .58);
+  border: 1px solid rgba(255, 255, 255, .62);
+  box-shadow: 0 28px 80px rgba(37, 57, 37, .16);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  text-align: center;
+  color: #23402c;
+}
+
+.loading-card img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 14px;
+  filter: drop-shadow(0 12px 18px rgba(31, 54, 31, .16));
+}
+
+.loading-card span {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.loading-card p {
+  margin: 10px 0 0;
+  font-size: .94rem;
+  color: rgba(35, 64, 44, .72);
+}

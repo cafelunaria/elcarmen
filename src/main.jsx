@@ -85,24 +85,53 @@ function useRevealOnScroll(deps = []) {
   }, deps);
 }
 
+function sanitizeContentForSave(value) {
+  // Nunca guardamos metadatos locales como plantilla por defecto.
+  // El contenido real vive en Firestore: siteContent/main.
+  const clean = structuredClone(value || {});
+  delete clean.updatedAt;
+  return clean;
+}
+
 function useSiteContent() {
-  const [content, setContent] = useState(defaultContent);
+  // IMPORTANTE: content inicia en null para NO mostrar ni guardar defaultContent
+  // mientras Firebase todavía está cargando. Esto evita que cambios de código
+  // borren textos o imágenes ya guardados desde el panel.
+  const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState('Cargando contenido desde Firebase...');
 
   async function load() {
     setLoading(true);
+    setStatus('Cargando contenido desde Firebase...');
+
     try {
       if (!firebaseReady) {
         const local = localStorage.getItem('finca-el-carmen-content');
-        setContent(local ? mergeContent(defaultContent, JSON.parse(local)) : defaultContent);
+        const localContent = local ? mergeContent(defaultContent, JSON.parse(local)) : defaultContent;
+        setContent(localContent);
         setStatus('Modo local: configura Firebase para guardar en la nube.');
         return;
       }
-      const snap = await getDoc(doc(db, 'siteContent', 'main'));
-      setContent(snap.exists() ? mergeContent(defaultContent, snap.data()) : defaultContent);
+
+      const refDoc = doc(db, 'siteContent', 'main');
+      const snap = await getDoc(refDoc);
+
+      if (snap.exists()) {
+        // Firebase es la fuente de verdad. defaultContent solo completa campos nuevos
+        // que agreguemos en futuras versiones, sin borrar lo existente.
+        setContent(mergeContent(defaultContent, snap.data()));
+        setStatus('Contenido cargado desde Firebase.');
+      } else {
+        // Solo usamos defaultContent si el documento aún no existe.
+        // No lo guardamos automáticamente para evitar sobreescrituras accidentales.
+        setContent(defaultContent);
+        setStatus('No existe contenido inicial en Firebase. Edita y guarda una primera versión.');
+      }
     } catch (error) {
       setStatus(`Error al cargar: ${error.message}`);
+      // Si falla Firebase, mostramos plantilla pero NO guardamos automáticamente.
+      setContent(defaultContent);
     } finally {
       setLoading(false);
     }
@@ -110,15 +139,27 @@ function useSiteContent() {
 
   async function save(nextContent) {
     setStatus('Guardando...');
+
     try {
+      const cleanContent = sanitizeContentForSave(nextContent);
+
       if (!firebaseReady) {
-        localStorage.setItem('finca-el-carmen-content', JSON.stringify(nextContent));
-        setContent(nextContent);
+        localStorage.setItem('finca-el-carmen-content', JSON.stringify(cleanContent));
+        setContent(mergeContent(defaultContent, cleanContent));
         setStatus('Guardado en modo local.');
         return;
       }
-      await setDoc(doc(db, 'siteContent', 'main'), { ...nextContent, updatedAt: serverTimestamp() }, { merge: true });
-      setContent(nextContent);
+
+      const refDoc = doc(db, 'siteContent', 'main');
+      const snap = await getDoc(refDoc);
+      const currentData = snap.exists() ? snap.data() : {};
+
+      // Fusionamos con el contenido existente para conservar campos/imágenes
+      // aunque el código nuevo agregue secciones o falten campos en el borrador.
+      const safePayload = mergeContent(currentData, cleanContent);
+
+      await setDoc(refDoc, { ...safePayload, updatedAt: serverTimestamp() }, { merge: true });
+      setContent(mergeContent(defaultContent, safePayload));
       setStatus('Cambios guardados en Firebase.');
     } catch (error) {
       setStatus(`Error al guardar: ${error.message}`);
@@ -126,7 +167,7 @@ function useSiteContent() {
   }
 
   useEffect(() => { load(); }, []);
-  return { content, setContent, loading, status, save };
+  return { content, setContent, loading, status, save, reload: load };
 }
 
 function useImagePreload(src) {
@@ -348,6 +389,16 @@ function PublicSite({ content, setRoute }) {
   </>;
 }
 
+function LoadingPage({ message = 'Cargando contenido...' }) {
+  return <div className="loading-page">
+    <div className="loading-card">
+      <img src="/el-carmen-logo.jpg" alt="Finca El Carmen" />
+      <span>Finca El Carmen</span>
+      <p>{message}</p>
+    </div>
+  </div>;
+}
+
 function Login({ onLogged }) {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState('');
   async function submit(e) { e.preventDefault(); if (!firebaseReady) return onLogged({ email: 'local@admin.test' }); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setError(err.message); } }
@@ -423,9 +474,18 @@ function App() {
   const { content, setContent, loading, status, save } = useSiteContent();
   const [route, setRoute] = useState(location.pathname.includes('admin') ? 'admin' : 'public');
   const [user, setUser] = useState(null);
-  useEffect(() => { if (!firebaseReady) return; return onAuthStateChanged(auth, setUser); }, []);
+
+  useEffect(() => {
+    if (!firebaseReady) return;
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  // No renderizamos la web ni el panel hasta que Firebase haya terminado de cargar.
+  // Así evitamos mostrar defaultContent y evitamos guardar accidentalmente la plantilla.
+  if (loading || !content) return <LoadingPage message={status || 'Cargando contenido...'} />;
+
   if (route === 'admin' && !user) return <Login onLogged={setUser} />;
-  if (route === 'admin') return <AdminPanel content={content} setContent={setContent} save={save} status={loading ? 'Sincronizando contenido...' : status} setRoute={setRoute} />;
+  if (route === 'admin') return <AdminPanel content={content} setContent={setContent} save={save} status={status} setRoute={setRoute} />;
   return <PublicSite content={content} setRoute={setRoute} />;
 }
 
