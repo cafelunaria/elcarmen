@@ -282,9 +282,40 @@ function ContactButtons({ contact }) {
   </div>;
 }
 
+
+function ImageLightbox({ image, onClose }) {
+  useEffect(() => {
+    if (!image) return;
+    const onKeyDown = event => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.body.classList.add('lightbox-open');
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.classList.remove('lightbox-open');
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [image, onClose]);
+
+  if (!image) return null;
+
+  return (
+    <div className="image-lightbox" role="dialog" aria-modal="true" aria-label="Imagen ampliada" onClick={onClose}>
+      <button type="button" className="lightbox-close" aria-label="Cerrar imagen" onClick={onClose}>
+        <X size={24} />
+      </button>
+      <img src={image.src} alt={image.alt || 'Imagen ampliada'} onClick={event => event.stopPropagation()} />
+    </div>
+  );
+}
+
 function PublicSite({ content, setRoute }) {
   useRevealOnScroll([content]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const openLightbox = (src, alt = 'Imagen ampliada') => {
+    if (src) setLightboxImage({ src, alt });
+  };
   const logoSrc = content.logo || '/el-carmen-logo.jpg';
   const heroImageReady = useImagePreload(content.hero.image);
   const priorityImages = [content.hero.image, ...(content.coffees || []).map(coffee => coffee.image), ...(content.gallery || [])];
@@ -321,8 +352,8 @@ function PublicSite({ content, setRoute }) {
       </nav>
     </header>
 
-    <section className={`hero ${heroImageReady ? 'hero-image-ready' : 'hero-image-pending'}`} style={heroStyle} id="inicio">
-      <div className="hero-content reveal">
+    <section className={`hero ${heroImageReady ? 'hero-image-ready hero-clickable' : 'hero-image-pending'}`} style={heroStyle} id="inicio" onClick={() => openLightbox(content.hero.image, content.hero.title)} title={content.hero.image ? 'Ver imagen completa' : undefined}>
+      <div className="hero-content reveal" onClick={event => event.stopPropagation()}>
         <img className="hero-logo" src={logoSrc} alt={content.brand} />
         <span className="eyebrow"><Leaf size={16}/> Café especial ecuatoriano</span>
         <h1>{content.hero.title}</h1>
@@ -354,7 +385,7 @@ function PublicSite({ content, setRoute }) {
         <div className="grid">
           {content.coffees.map((c, i) => (
             <article className="card coffee-card reveal" key={i} style={{ transitionDelay: `${i * 90}ms` }}>
-              {c.image && <img src={c.image} alt={c.name} loading={i === 0 ? 'eager' : 'lazy'} decoding="async"/>}
+              {c.image && <img className="zoomable-image" src={c.image} alt={c.name} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onClick={() => openLightbox(c.image, c.name)}/>}
               <h3>{c.name}</h3>
               <p><b>Proceso:</b> {c.process}</p>
               <p><b>Notas:</b> {c.notes}</p>
@@ -370,7 +401,7 @@ function PublicSite({ content, setRoute }) {
         </div>
         <div className="gallery">
           {content.gallery.length ? content.gallery.map((img, i) => (
-            <img className="reveal" src={img} key={i} alt={`Galería ${i+1}`} loading={i < 2 ? 'eager' : 'lazy'} decoding="async" style={{ transitionDelay: `${i * 70}ms` }}/>
+            <img className="reveal zoomable-image" src={img} key={i} alt={`Galería ${i+1}`} loading={i < 2 ? 'eager' : 'lazy'} decoding="async" style={{ transitionDelay: `${i * 70}ms` }} onClick={() => openLightbox(img, `Galería ${i + 1}`)}/>
           )) : <p>Aún no hay imágenes cargadas.</p>}
         </div>
       </section>
@@ -386,6 +417,8 @@ function PublicSite({ content, setRoute }) {
       <img src={logoSrc} alt={content.brand} />
       <span>© {new Date().getFullYear()} {content.brand}. Todos los derechos reservados.</span>
     </footer>
+
+    <ImageLightbox image={lightboxImage} onClose={() => setLightboxImage(null)} />
   </>;
 }
 
